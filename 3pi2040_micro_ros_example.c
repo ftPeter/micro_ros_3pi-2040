@@ -5,9 +5,11 @@
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
 #include <std_msgs/msg/int32.h>
+#include <std_msgs/msg/u_int16.h>
 #include <rmw_microros/rmw_microros.h>
 
 #include "pico/stdlib.h"
+#include <hardware/adc.h>
 #include "pico_uart_transports.h"
 
 const uint LED_PIN = 25;
@@ -15,10 +17,28 @@ const uint LED_PIN = 25;
 rcl_publisher_t publisher;
 std_msgs__msg__Int32 msg;
 
+// battery publisher
+rcl_publisher_t battery_publisher;
+std_msgs__msg__UInt16 battery_msg;
+
+uint16_t battery_get_level_millivolts()
+{
+  // TODO This function comes from Pololu, give it credit!
+  if (!(adc_hw->cs & ADC_CS_EN_BITS)) { adc_init(); }
+  adc_select_input(0);
+  adc_gpio_init(26);
+  return adc_read() * (11 * 3300) / 4096;
+} 
+
 void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
     rcl_ret_t ret = rcl_publish(&publisher, &msg, NULL);
     msg.data++;
+   
+    // TODO update battery
+    uint16_t level_mv = battery_get_level_millivolts();
+    battery_msg.data = level_mv;
+    ret = rcl_publish(&battery_publisher, &battery_msg, NULL);
 }
 
 int main()
@@ -62,7 +82,14 @@ int main()
         &publisher,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-        "pico_publisher");
+        "pico_publisher_hello");
+
+    rclc_publisher_init_default(
+        &battery_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16),
+        "pico_battery");
+
 
     rclc_timer_init_default(
         &timer,
@@ -75,7 +102,10 @@ int main()
 
     gpio_put(LED_PIN, 1);
 
+    // initialize messages
     msg.data = 0;
+    battery_msg.data = 0;
+
     while (true)
     {
         rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
