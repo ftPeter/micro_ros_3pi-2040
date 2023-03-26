@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 pico_sdk_init()
-
+add_subdirectory(./pololu_3pi_2040_robot pololu_3pi_2040_robot)
 link_directories(libmicroros)
 add_executable(3pi2040_micro_ros_example
     3pi2040_micro_ros_example.c
@@ -16,7 +16,7 @@ add_executable(3pi2040_micro_ros_example
 target_link_libraries(3pi2040_micro_ros_example
     pico_stdlib
     microros
-    hardware_adc
+    pololu_3pi_2040_robot
 )
 
 target_include_directories(3pi2040_micro_ros_example PUBLIC

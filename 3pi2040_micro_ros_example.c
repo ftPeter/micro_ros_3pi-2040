@@ -9,8 +9,9 @@
 #include <rmw_microros/rmw_microros.h>
 
 #include "pico/stdlib.h"
-#include <hardware/adc.h>
 #include "pico_uart_transports.h"
+
+#include <pololu_3pi_2040_robot.h>
 
 const uint LED_PIN = 25;
 
@@ -21,6 +22,9 @@ std_msgs__msg__Int32 msg;
 rcl_publisher_t battery_publisher;
 std_msgs__msg__UInt16 battery_msg;
 
+// motor subscriber
+// 
+/*
 uint16_t battery_get_level_millivolts()
 {
   // TODO This function comes from Pololu, give it credit!
@@ -29,6 +33,7 @@ uint16_t battery_get_level_millivolts()
   adc_gpio_init(26);
   return adc_read() * (11 * 3300) / 4096;
 } 
+*/
 
 void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
@@ -84,6 +89,7 @@ int main()
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
         "pico_publisher_hello");
 
+    // battery level publisher
     rclc_publisher_init_default(
         &battery_publisher,
         &node,
