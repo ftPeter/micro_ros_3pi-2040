@@ -6,6 +6,8 @@
 #include <rclc/executor.h>
 #include <std_msgs/msg/int32.h>
 #include <std_msgs/msg/u_int16.h>
+#include <std_msgs/msg/color_rgba.h>
+#include <geometry_msgs/msg/twist.h>
 #include <rmw_microros/rmw_microros.h>
 
 #include "pico/stdlib.h"
@@ -23,17 +25,53 @@ rcl_publisher_t battery_publisher;
 std_msgs__msg__UInt16 battery_msg;
 
 // motor subscriber
-// 
-/*
-uint16_t battery_get_level_millivolts()
+bool em_stop = false;
+rcl_subscription_t cmd_vel_sub;
+geometry_msgs__msg__Twist cmd_vel;
+
+// rgb led subscriberr
+rcl_subscription_t rgb_led_sub;
+std_msgs__msg__ColorRGBA rgb_led;
+
+void threepi_set_speed_command(float linear_m_s, float angle_rad_s) {
+    const float WHEEL_SEPERATION_DIST_M = 0.02;
+
+    float right_vel = (angle_rad_s * WHEEL_SEPERATION_DIST_M) / 2.0 + linear_m_s;
+    float left_vel = (linear_m_s * 2.0) - right_vel;
+
+    motors_set_speeds(left_vel, right_vel); 
+}
+
+void cmd_vel_callback(const void * msgin)
 {
-  // TODO This function comes from Pololu, give it credit!
-  if (!(adc_hw->cs & ADC_CS_EN_BITS)) { adc_init(); }
-  adc_select_input(0);
-  adc_gpio_init(26);
-  return adc_read() * (11 * 3300) / 4096;
-} 
-*/
+    geometry_msgs__msg__Twist * msg = (geometry_msgs__msg__Twist *) msgin;
+    if (!em_stop){
+        threepi_set_speed_command(msg->linear.x/3, msg->angular.z);
+    }
+}
+
+uint8_t rgb_convertor(float value) {
+    // float(0-127) -> uint8(0-31), with max and floor
+    if( value > 127 ) value = 127.0;
+    if( value < 0 ) value = 0.0;
+    value = value / 4.0; 
+    return (uint8_t) value;
+}
+
+void rgb_led_callback(const void * msgin)
+{
+    // display the RGBA message value on all 6 3pi+ RGB LEDs.
+    rgb_color colors[6];
+    std_msgs__msg__ColorRGBA * msg = (std_msgs__msg__ColorRGBA *) msgin;
+    
+    for(int i=0; i<6; i++) {
+        colors[i].red = rgb_convertor(msg->r);
+        colors[i].green = rgb_convertor(msg->g);
+        colors[i].blue = rgb_convertor(msg->b);
+    }
+
+    rgb_leds_write(colors, 6, rgb_convertor(msg->a));
+}
 
 void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
@@ -59,6 +97,8 @@ int main()
 
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
+
+    motors_init();
 
     rcl_timer_t timer;
     rcl_node_t node;
@@ -96,6 +136,19 @@ int main()
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16),
         "pico_battery");
 
+    // motor twist subscriber
+    rclc_subscription_init_default(
+        &cmd_vel_sub,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+        "cmd_vel");
+
+    // rgb light subscriber
+    rclc_subscription_init_default(
+        &rgb_led_sub,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, ColorRGBA),
+        "rgb_led");
 
     rclc_timer_init_default(
         &timer,

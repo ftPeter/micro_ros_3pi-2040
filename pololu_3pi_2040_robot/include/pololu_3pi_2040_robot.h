@@ -56,4 +56,5 @@ void motors_flip_left(bool flip);
 void motors_flip_right(bool flip);
 void motors_set_left_speed(int32_t speed);
 void motors_set_right_speed(int32_t speed);
+void motors_set_speeds(int32_t left_speed, int32_t right_speed);
 
