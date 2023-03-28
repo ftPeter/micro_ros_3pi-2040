@@ -4,10 +4,12 @@
 #include <rcl/error_handling.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
+
 #include <std_msgs/msg/int32.h>
 #include <std_msgs/msg/u_int16.h>
 #include <std_msgs/msg/color_rgba.h>
 #include <geometry_msgs/msg/twist.h>
+
 #include <rmw_microros/rmw_microros.h>
 
 #include "pico/stdlib.h"
@@ -16,9 +18,6 @@
 #include <pololu_3pi_2040_robot.h>
 
 const uint LED_PIN = 25;
-
-rcl_publisher_t publisher;
-std_msgs__msg__Int32 msg;
 
 // battery publisher
 rcl_publisher_t battery_publisher;
@@ -44,10 +43,13 @@ void threepi_set_speed_command(float linear_m_s, float angle_rad_s) {
 
 void cmd_vel_callback(const void * msgin)
 {
+    // TODO the speed range is not yet calibrated at all
+    // so to test use a linear.x of 6000 max and -6000 min.
     geometry_msgs__msg__Twist * msg = (geometry_msgs__msg__Twist *) msgin;
     if (!em_stop){
-        threepi_set_speed_command(msg->linear.x/3, msg->angular.z);
+        threepi_set_speed_command(msg->linear.x, msg->angular.z);
     }
+
 }
 
 uint8_t rgb_convertor(float value) {
@@ -74,10 +76,8 @@ void rgb_led_callback(const void * msgin)
 
 void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
-    rcl_ret_t ret = rcl_publish(&publisher, &msg, NULL);
-    msg.data++;
-   
-    // TODO update battery
+    rcl_ret_t ret;
+    // update battery
     uint16_t level_mv = battery_get_level_millivolts();
     battery_msg.data = level_mv;
     ret = rcl_publish(&battery_publisher, &battery_msg, NULL);
@@ -125,18 +125,13 @@ int main()
     rclc_support_init(&support, 0, NULL, &allocator);
 
     rclc_node_init_default(&node, "pico_node", "", &support);
-    rclc_publisher_init_default(
-        &publisher,
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-        "pico_publisher_hello");
 
     // battery level publisher
     rclc_publisher_init_default(
         &battery_publisher,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16),
-        "pico_battery");
+        "battery");
 
     // motor twist subscriber
     rclc_subscription_init_default(
@@ -158,16 +153,19 @@ int main()
         RCL_MS_TO_NS(1000),
         timer_callback);
 
-    rclc_executor_init(&executor, &support.context, 2, &allocator);
+    rclc_executor_init(&executor, &support.context, 3, &allocator);
     rclc_executor_add_timer(&executor, &timer);
+    rclc_executor_add_subscription(&executor, &cmd_vel_sub, 
+                                    &cmd_vel_msg, &cmd_vel_callback, 
+                                    ON_NEW_DATA);
     rclc_executor_add_subscription(&executor, &rgb_led_sub, 
                                     &rgb_led_msg, &rgb_led_callback, 
                                     ON_NEW_DATA);
 
+
     gpio_put(LED_PIN, 1);
 
     // initialize messages
-    msg.data = 0;
     battery_msg.data = 0;
 
     while (true)
