@@ -27,11 +27,11 @@ std_msgs__msg__UInt16 battery_msg;
 // motor subscriber
 bool em_stop = false;
 rcl_subscription_t cmd_vel_sub;
-geometry_msgs__msg__Twist cmd_vel;
+geometry_msgs__msg__Twist cmd_vel_msg;
 
 // rgb led subscriberr
 rcl_subscription_t rgb_led_sub;
-std_msgs__msg__ColorRGBA rgb_led;
+std_msgs__msg__ColorRGBA rgb_led_msg;
 
 void threepi_set_speed_command(float linear_m_s, float angle_rad_s) {
     const float WHEEL_SEPERATION_DIST_M = 0.02;
@@ -69,7 +69,6 @@ void rgb_led_callback(const void * msgin)
         colors[i].green = rgb_convertor(msg->g);
         colors[i].blue = rgb_convertor(msg->b);
     }
-
     rgb_leds_write(colors, 6, rgb_convertor(msg->a));
 }
 
@@ -99,6 +98,9 @@ int main()
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
     motors_init();
+
+    rgb_leds_init();
+    rgb_leds_off();
 
     rcl_timer_t timer;
     rcl_node_t node;
@@ -156,8 +158,11 @@ int main()
         RCL_MS_TO_NS(1000),
         timer_callback);
 
-    rclc_executor_init(&executor, &support.context, 1, &allocator);
+    rclc_executor_init(&executor, &support.context, 2, &allocator);
     rclc_executor_add_timer(&executor, &timer);
+    rclc_executor_add_subscription(&executor, &rgb_led_sub, 
+                                    &rgb_led_msg, &rgb_led_callback, 
+                                    ON_NEW_DATA);
 
     gpio_put(LED_PIN, 1);
 
